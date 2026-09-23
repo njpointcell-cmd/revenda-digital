@@ -132,6 +132,7 @@ model Product {
   categoryId       String
   category         Category         @relation(fields: [categoryId], references: [id])
   supplierProduct  SupplierProduct?
+  attachments   Attachment[]
   stock            Stock[]
   orderItems       OrderItem[]
   createdAt        DateTime         @default(now())
@@ -290,8 +291,26 @@ model TicketMessage {
   body      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  attachments Attachment[]
 
   @@index([ticketId, createdAt])
+}
+
+model Attachment {
+  id              String         @id @default(cuid())
+  url             String
+  publicId        String
+  filename        String
+  contentType     String
+  bytes           Int
+  productId       String?
+  product         Product?       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  ticketMessageId String?
+  ticketMessage   TicketMessage? @relation(fields: [ticketMessageId], references: [id], onDelete: Cascade)
+  createdAt       DateTime       @default(now())
+
+  @@index([productId])
+  @@index([ticketMessageId])
 }
 
 model AuditLog {

@@ -33,7 +33,7 @@ export async function syncSupplierCatalog(){
         name:item.name,slug:slugify(item.slug||item.name)+'-'+slugify(item.externalCode).slice(0,20),
         description:item.description||item.shortDescription||`Produto importado do fornecedor ${supplier.name}.`,
         shortDescription:item.shortDescription||item.name,
-        image:item.image?.startsWith('https://')?item.image:null,
+        image:item.image?.startsWith('https://')?item.image:(existing?.product.image??null),
         price:item.cost?priceWithMargin(item.cost):existing?.product.price.toFixed(2)??'0.01',
         cost:item.cost??existing?.product.cost.toFixed(2)??'0.00',
         status:'ACTIVE' as const,deliveryType:'AUTOMATIC_API' as const,availableStock:item.quantity,

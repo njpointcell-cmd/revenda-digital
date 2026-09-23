@@ -24,6 +24,9 @@ SUPPLIER_NAME=Fornecedor principal
 SUPPLIER_PRICE_MARGIN_PERCENT=50
 MERCADOPAGO_ACCESS_TOKEN=<access token do Mercado Pago>
 CRON_SECRET=<segredo aleatório usado pelo serviço de sincronização>
+CLOUDINARY_CLOUD_NAME=<nome do Cloudinary>
+CLOUDINARY_API_KEY=<chave do Cloudinary>
+CLOUDINARY_API_SECRET=<segredo do Cloudinary>
 ```
 
 Não envie `.env` para o repositório. Use somente as Variables do Railway.
