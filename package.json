@@ -16,6 +16,7 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts"
+    ,"db:provision-admin": "tsx prisma/provision-admin.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",
