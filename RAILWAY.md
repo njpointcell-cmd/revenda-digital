@@ -51,11 +51,12 @@ Crie um segundo serviço no mesmo projeto Railway, conectado ao mesmo repositór
 com o comando:
 
 ```text
-sh -c 'curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/internal/supplier-sync"'
+npm run supplier:sync
 ```
 
-No serviço de sincronização, configure `APP_URL` com o domínio público da aplicação e
-copie `CRON_SECRET`. Em **Settings > Deploy > Cron Schedule**, use:
+O script usa o `fetch` nativo do Node e não depende de `curl`. No serviço de
+sincronização, configure `APP_URL` com o domínio público da aplicação e copie
+`CRON_SECRET`. Em **Settings > Deploy > Cron Schedule**, use:
 
 ```text
 */10 * * * *
