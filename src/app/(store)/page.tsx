@@ -1,0 +1,6 @@
+import Link from 'next/link';
+import {listProducts} from '@/services/catalog/catalog.service';
+import {ProductCard} from '@/components/catalog/product-card';
+import {EmptyState} from '@/components/ui';
+export const dynamic='force-dynamic';
+export default async function Home(){const {products}=await listProducts({});return <><section className="hero"><span className="eyebrow">Bem-vindo à NJ Story</span><h1>Seu universo digital.<br/><em>Novas possibilidades.</em></h1><p>Explore nosso catálogo de produtos digitais e encontre o que combina com o seu próximo passo.</p><Link className="button" href="/produtos">Explorar catálogo ↗</Link></section><div className="row notice"><span>Catálogo digital</span><span>•</span><span>Conta protegida</span><span>•</span><span>Experiência simples</span></div><div className="section-head"><div><span className="eyebrow">Descubra</span><h2>Novidades na loja</h2></div><Link className="text-link" href="/produtos">Ver todos →</Link></div>{products.length?<div className="grid">{products.slice(0,4).map(p=><ProductCard key={p.id} product={p}/>)}</div>:<EmptyState title="Novidades chegando" description="Nosso catálogo está sendo preparado."/>}<div className="notice">Ambiente em desenvolvimento. Produtos DEMO são fictícios e não estão disponíveis para compra real.</div></>;}

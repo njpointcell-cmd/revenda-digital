@@ -1,0 +1,3 @@
+import {ZodError} from 'zod';
+import {Prisma} from '@prisma/client';
+export function actionError(error:unknown){if(error instanceof ZodError)return {error:error.issues[0]?.message??'Dados inválidos'};if(error instanceof Prisma.PrismaClientKnownRequestError)return {error:error.code==='P2002'?'Este e-mail ou slug já está em uso.':'Não foi possível salvar os dados.'};if(error instanceof Prisma.PrismaClientInitializationError)return {error:'Serviço temporariamente indisponível.'};if(error instanceof Error&&!error.message.includes('\n'))return {error:error.message};return {error:'Não foi possível concluir a operação.'};}

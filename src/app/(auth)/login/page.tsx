@@ -1,0 +1,2 @@
+import {AuthForm} from '@/components/auth/auth-form';
+export default async function Login({searchParams}:{searchParams:Promise<{changed?:string}>}){const {changed}=await searchParams;return <div className="auth-box"><span className="eyebrow">Bem-vindo de volta</span><h1>Acesse sua conta</h1><p>Seu universo digital em um só lugar.</p>{changed&&<p className="success">Senha alterada. Entre com sua nova senha.</p>}<div className="card"><AuthForm mode="login"/></div></div>;}

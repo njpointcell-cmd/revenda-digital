@@ -1,0 +1,6 @@
+import {z} from 'zod';
+export const slugSchema=z.string().trim().min(2).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/,'Use letras minúsculas, números e hífens');
+export const categorySchema=z.object({name:z.string().trim().min(2).max(80),slug:slugSchema,description:z.string().trim().max(2000)});
+const decimal=z.string().regex(/^\d{1,10}(\.\d{1,2})?$/,'Use um valor positivo com até duas casas decimais');
+export const productSchema=z.object({name:z.string().trim().min(2).max(150),slug:slugSchema,description:z.string().trim().min(10).max(10000),shortDescription:z.string().trim().min(5).max(250),price:decimal.refine(v=>Number(v)>0,'Preço deve ser maior que zero'),cost:decimal,categoryId:z.string().min(1),image:z.union([z.literal(''),z.string().url().max(2000).refine(v=>v.startsWith('https://'),'Use HTTPS')]),availableStock:z.coerce.number().int().min(0).max(1000000),deliveryType:z.enum(['MANUAL','INTERNAL_STOCK','AUTOMATIC_API']),status:z.enum(['ACTIVE','INACTIVE','DRAFT'])});
+export const catalogQuerySchema=z.object({q:z.string().trim().max(100).default(''),category:z.string().max(100).default(''),sort:z.enum(['recent','price-asc','price-desc','name']).catch('recent'),available:z.enum(['true','']).catch(''),page:z.coerce.number().int().min(1).max(10000).catch(1)});

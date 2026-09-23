@@ -1,0 +1,2 @@
+import type {CartLine} from '@/types/cart';
+export function cartTotal(lines:CartLine[]){return lines.reduce((sum,item)=>{if(!Number.isSafeInteger(item.quantity)||item.quantity<1||item.quantity>99||!Number.isSafeInteger(item.unitPriceCents)||item.unitPriceCents<0)throw new Error('Item inválido');const total=sum+item.quantity*item.unitPriceCents;if(!Number.isSafeInteger(total))throw new Error('Total inválido');return total;},0);}
