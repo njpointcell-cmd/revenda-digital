@@ -11,5 +11,5 @@ export type SupplierStock={
   cost?:string;
   updatedAt:Date;
 };
-export type ReservationInput={externalCode:string;quantity:number;orderId:string;idempotencyKey:string};
+export type ReservationInput={externalCode:string;service:string;quantity:number;orderId:string;idempotencyKey:string};
 export type ReservationResult={reservationId:string;content:string};

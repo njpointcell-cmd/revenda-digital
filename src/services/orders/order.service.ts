@@ -12,14 +12,17 @@ export function decrypt(value:string){const [ivValue,tagValue,contentValue]=valu
 
 export async function fulfillPaidOrder(orderId:string){
   const order=await db.order.findUnique({where:{id:orderId},include:{items:{include:{delivery:true,product:{include:{supplierProduct:true}}}}}});
-  if(!order||order.status!=='PAID')return;
+  if(!order||!['PAID','PROCESSING'].includes(order.status))return;
   const supplierService=configuredSupplierService();
-  await db.order.update({where:{id:order.id},data:{status:'PROCESSING',history:{create:{status:'PROCESSING',reason:'Pagamento aprovado; reservando produtos.'}}}});
+  if(order.status==='PAID')await db.order.update({where:{id:order.id},data:{status:'PROCESSING',history:{create:{status:'PROCESSING',reason:'Pagamento aprovado; reservando produtos.'}}}});
   for(const item of order.items){
     if(item.deliveryType!=='AUTOMATIC_API'||!item.product.supplierProduct)continue;
     if(item.delivery?.status==='DELIVERED')continue;
     try{
-      const result=await supplierService.getProvider('generic-rest').reserveProduct({externalCode:item.product.supplierProduct.externalCode,quantity:item.quantity,orderId:order.id,idempotencyKey:`delivery-${item.id}`});
+      const provider=supplierService.getProvider('generic-rest');
+      const current=await provider.getProduct(item.product.supplierProduct.externalCode);
+      if(!current||current.quantity<item.quantity)throw new Error('Fornecedor sem estoque suficiente no momento da entrega.');
+      const result=await provider.reserveProduct({externalCode:item.product.supplierProduct.externalCode,service:current.service,quantity:item.quantity,orderId:order.id,idempotencyKey:`delivery-${item.id}`});
       await db.delivery.upsert({where:{orderItemId:item.id},update:{status:'DELIVERED',encryptedContent:encrypt(result.content),externalReservationId:result.reservationId,deliveredAt:new Date(),errorCode:null},create:{orderItemId:item.id,idempotencyKey:`delivery-${item.id}`,status:'DELIVERED',encryptedContent:encrypt(result.content),externalReservationId:result.reservationId,deliveredAt:new Date()}});
     }catch(error){
       const message=error instanceof Error?error.message:'Falha desconhecida na reserva.';

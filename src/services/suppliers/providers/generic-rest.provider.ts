@@ -12,11 +12,12 @@ type RawProduct={
 function text(value:unknown){return typeof value==='string'&&value.trim()?value.trim():undefined;}
 function number(value:unknown){const parsed=typeof value==='number'?value:Number(value);return Number.isFinite(parsed)?parsed:undefined;}
 function parseProduct(value:RawProduct):SupplierStock{
-  const service=text(value.service)??text(value.externalCode)??text(value.code)??text(value.id);
+  const externalCode=text(value.externalCode)??text(value.code)??text(value.id)??text(value.service);
+  const service=text(value.service)??text(value.name)??text(value.title)??externalCode;
   const quantity=number(value.quantity??value.stock);
-  if(!service||quantity===undefined||quantity<0)throw new Error('Resposta do fornecedor contém produto inválido.');
+  if(!externalCode||!service||quantity===undefined||quantity<0)throw new Error('Resposta do fornecedor contém produto inválido.');
   return {
-    externalCode:service,
+    externalCode,
     service,
     name:text(value.name)??text(value.title)??service,
     slug:text(value.slug),
@@ -54,7 +55,7 @@ export class GenericRestSupplierProvider implements SupplierProvider{
   }
   async getProduct(externalCode:string){return (await this.getStock()).find(item=>item.externalCode===externalCode)??null;}
   async reserveProduct(input:ReservationInput):Promise<ReservationResult>{
-    const response=await this.request('/api/stock/reserve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({service:input.externalCode,buyer_id:input.orderId,sale_id:input.idempotencyKey})});
+    const response=await this.request('/api/stock/reserve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({service:input.service,buyer_id:input.orderId,sale_id:input.idempotencyKey})});
     const payload=await response.json() as {access?:unknown;reservation_id?:unknown;reservationId?:unknown};
     if(!payload.access)throw new Error('Fornecedor não retornou os dados de acesso.');
     return {reservationId:text(payload.reservation_id)??text(payload.reservationId)??input.idempotencyKey,content:JSON.stringify(payload.access)};
