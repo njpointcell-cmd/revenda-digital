@@ -31,7 +31,7 @@ export async function replyTicket(_:ActionState,form:FormData):Promise<ActionSta
   const user=await requireUser();
   try{
     const ticketId=String(form.get('ticketId')??'');const data=messageSchema.parse({body:form.get('body')});
-    const ticket=await db.ticket.findFirst({where:{id:ticketId,userId:user.id}});if(!ticket)throw new Error('Chamado não encontrado.');
+    const ticket=await db.ticket.findFirst({where:{id:ticketId,userId:user.id}});if(!ticket)throw new Error('Chamado não encontrado.');if(ticket.status==='CLOSED')throw new Error('Este chamado foi encerrado. Abra um novo ticket para continuar o atendimento.');
     const attachment=await attachmentData(form,'revenda-digital/tickets');
     await db.$transaction([db.ticketMessage.create({data:{ticketId,authorId:user.id,body:data.body,attachments:attachment?{create:attachment}:undefined}}),db.ticket.update({where:{id:ticketId},data:{status:'WAITING_SUPPORT'}})]);
     await notifyAdminsCustomerReply({id:ticket.id,subject:ticket.subject,userName:user.name});
@@ -42,7 +42,7 @@ export async function adminReplyTicket(_:ActionState,form:FormData):Promise<Acti
   const admin=await requireAdmin();
   try{
     const ticketId=String(form.get('ticketId')??'');const data=messageSchema.parse({body:form.get('body')});
-    const ticket=await db.ticket.findUnique({where:{id:ticketId}});if(!ticket)throw new Error('Chamado não encontrado.');
+    const ticket=await db.ticket.findUnique({where:{id:ticketId}});if(!ticket)throw new Error('Chamado não encontrado.');if(ticket.status==='CLOSED')throw new Error('Este ticket está encerrado.');
     const attachment=await attachmentData(form,'revenda-digital/tickets');
     await db.$transaction([db.ticketMessage.create({data:{ticketId,authorId:admin.id,body:data.body,attachments:attachment?{create:attachment}:undefined}}),db.ticket.update({where:{id:ticketId},data:{status:'WAITING_CUSTOMER'}}),db.auditLog.create({data:{actorId:admin.id,action:'ticket.replied',entityId:ticketId}})]);
     revalidatePath('/admin/tickets');revalidatePath(`/minha-conta/suporte/${ticketId}`);return {success:'Resposta enviada.'};
