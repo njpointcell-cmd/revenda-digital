@@ -2,6 +2,7 @@ import {NextRequest,NextResponse} from 'next/server';
 import {getCurrentUser} from '@/services/auth/session';
 import {db} from '@/lib/db';
 import {getPayment} from '@/services/payments/mercado-pago';
+import {reconcileOrderPayment} from '@/services/orders/order.service';
 
 export async function GET(_request:NextRequest,{params}:{params:Promise<{orderId:string}>}){
   const user=await getCurrentUser();if(!user)return NextResponse.json({error:'Faça login para continuar.'},{status:401});
@@ -11,7 +12,9 @@ export async function GET(_request:NextRequest,{params}:{params:Promise<{orderId
   if(!order||!stored?.externalId)return NextResponse.json({error:'Pagamento não encontrado.'},{status:404});
   try{
     const payment=await getPayment(stored.externalId);
+    await reconcileOrderPayment(order.id,payment);
+    const refreshed=await db.order.findUnique({where:{id:order.id},select:{status:true}});
     const data=payment.point_of_interaction?.transaction_data;
-    return NextResponse.json({orderId:order.id,orderNumber:order.number,status:order.status,paymentStatus:payment.status,qrCodeBase64:data?.qr_code_base64??'',qrCode:data?.qr_code??'',ticketUrl:data?.ticket_url??'',expiresAt:payment.date_of_expiration??null});
+    return NextResponse.json({orderId:order.id,orderNumber:order.number,status:refreshed?.status??order.status,paymentStatus:payment.status,qrCodeBase64:data?.qr_code_base64??'',qrCode:data?.qr_code??'',ticketUrl:data?.ticket_url??'',expiresAt:payment.date_of_expiration??null});
   }catch{return NextResponse.json({error:'Não foi possível consultar o pagamento.'},{status:502});}
 }

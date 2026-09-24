@@ -5,6 +5,7 @@ import {cartSchema} from '@/validations/cart';
 import {configuredSupplierService} from '@/services/suppliers/supplier.service';
 import {createPixPayment} from '@/services/payments/mercado-pago';
 import {createCipheriv,createDecipheriv,createHash,randomBytes} from 'node:crypto';
+import type {PaymentResponse} from '@/services/payments/mercado-pago';
 
 function encrypt(value:string){const key=createHash('sha256').update(process.env.SESSION_SECRET??'').digest();const iv=randomBytes(12);const cipher=createCipheriv('aes-256-gcm',key,iv);const content=Buffer.concat([cipher.update(value,'utf8'),cipher.final()]);return `${iv.toString('base64url')}.${cipher.getAuthTag().toString('base64url')}.${content.toString('base64url')}`;}
 export function decrypt(value:string){const [ivValue,tagValue,contentValue]=value.split('.');if(!ivValue||!tagValue||!contentValue)throw new Error('Entrega inválida.');const key=createHash('sha256').update(process.env.SESSION_SECRET??'').digest();const decipher=createDecipheriv('aes-256-gcm',key,Buffer.from(ivValue,'base64url'));decipher.setAuthTag(Buffer.from(tagValue,'base64url'));return Buffer.concat([decipher.update(Buffer.from(contentValue,'base64url')),decipher.final()]).toString('utf8');}
@@ -47,4 +48,18 @@ export async function createOrder(userId:string,email:string,input:unknown){
     await db.order.update({where:{id:order.id},data:{status:'FAILED',history:{create:{status:'FAILED',reason:'Não foi possível gerar o pagamento PIX.'}}}});
     throw error;
   }
+}
+
+export async function reconcileOrderPayment(orderId:string,payment:PaymentResponse){
+    const status=payment.status==='approved'?'PAID':payment.status==='rejected'?'FAILED':(['cancelled','expired'].includes(payment.status)?'CANCELLED':'WAITING_PAYMENT') as 'PAID'|'FAILED'|'CANCELLED'|'WAITING_PAYMENT';
+    const paymentStatus=status==='PAID'?'PAID':status==='FAILED'?'FAILED':status==='CANCELLED'?'CANCELLED':'PENDING';
+    await db.$transaction(async tx=>{
+      const order=await tx.order.findUnique({where:{id:orderId}});
+      if(!order)return;
+      await tx.payment.updateMany({where:{orderId,provider:'mercadopago'},data:{externalId:String(payment.id),status:paymentStatus,confirmedAt:status==='PAID'?new Date():null}});
+      if(order.status==='PAID'||order.status==='DELIVERED'||order.status==='CANCELLED'||order.status==='FAILED')return;
+      await tx.order.update({where:{id:orderId},data:{status,history:{create:{status,reason:`Atualização Mercado Pago: ${payment.status}.`}}}});
+    });
+    if(status==='PAID')await fulfillPaidOrder(orderId);
+    return status;
 }
