@@ -62,10 +62,10 @@ sincronização, configure `APP_URL` com o domínio público da aplicação e co
 `CRON_SECRET`. Em **Settings > Deploy > Cron Schedule**, use:
 
 ```text
-*/10 * * * *
+*/5 * * * *
 ```
 
-O serviço executará a sincronização a cada dez minutos e encerrará após concluir.
+O serviço executará a sincronização a cada cinco minutos e encerrará após concluir.
 
 ## Primeiro acesso administrativo
 
