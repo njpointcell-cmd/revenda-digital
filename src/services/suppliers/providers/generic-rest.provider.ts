@@ -39,7 +39,10 @@ export class GenericRestSupplierProvider implements SupplierProvider{
         ...init,signal:controller.signal,headers:{Accept:'application/json',...(this.apiKey?{'X-Stock-Key':this.apiKey}:{}),...init?.headers},
         cache:'no-store',
       });
-      if(!response.ok)throw new Error(`Fornecedor respondeu HTTP ${response.status}.`);
+      if(!response.ok){
+        const details=await response.text().catch(()=> '');
+        throw new Error(`Fornecedor respondeu HTTP ${response.status}${details?`: ${details.slice(0,300)}`:''}.`);
+      }
       return response;
     }finally{clearTimeout(timer);}
   }

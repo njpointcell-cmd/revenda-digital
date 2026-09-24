@@ -21,7 +21,10 @@ export async function fulfillPaidOrder(orderId:string){
     try{
       const result=await supplierService.getProvider('generic-rest').reserveProduct({externalCode:item.product.supplierProduct.externalCode,quantity:item.quantity,orderId:order.id,idempotencyKey:`delivery-${item.id}`});
       await db.delivery.upsert({where:{orderItemId:item.id},update:{status:'DELIVERED',encryptedContent:encrypt(result.content),externalReservationId:result.reservationId,deliveredAt:new Date(),errorCode:null},create:{orderItemId:item.id,idempotencyKey:`delivery-${item.id}`,status:'DELIVERED',encryptedContent:encrypt(result.content),externalReservationId:result.reservationId,deliveredAt:new Date()}});
-    }catch{await db.delivery.upsert({where:{orderItemId:item.id},update:{status:'FAILED',errorCode:'SUPPLIER_RESERVATION_FAILED'},create:{orderItemId:item.id,idempotencyKey:`delivery-${item.id}`,status:'FAILED',errorCode:'SUPPLIER_RESERVATION_FAILED'}});}
+    }catch(error){
+      const message=error instanceof Error?error.message:'Falha desconhecida na reserva.';
+      await db.delivery.upsert({where:{orderItemId:item.id},update:{status:'FAILED',errorCode:message.slice(0,500)},create:{orderItemId:item.id,idempotencyKey:`delivery-${item.id}`,status:'FAILED',errorCode:message.slice(0,500)}});
+    }
   }
   const failed=await db.delivery.count({where:{orderItem:{orderId:order.id},status:'FAILED'}});
   await db.order.update({where:{id:order.id},data:{status:failed?'PROCESSING':'DELIVERED',history:{create:{status:failed?'PROCESSING':'DELIVERED',reason:failed?'Aguardando nova tentativa de entrega.':'Produtos reservados e entregues.'}}}});
