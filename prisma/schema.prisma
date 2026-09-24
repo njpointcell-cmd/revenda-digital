@@ -72,6 +72,7 @@ enum WalletTopUpStatus {
 enum WalletTransactionType {
   TOP_UP
   ORDER_PAYMENT
+  ADMIN_CREDIT
 }
 
 model User {
@@ -89,6 +90,7 @@ model User {
   auditLogs    AuditLog[]
   wallet       Wallet?
   walletTopUps WalletTopUp[]
+  pushSubscriptions AdminPushSubscription[]
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
 }
@@ -338,6 +340,20 @@ model Ticket {
 
   @@index([userId, createdAt])
   @@index([status])
+}
+
+model AdminPushSubscription {
+  id        String   @id @default(cuid())
+  adminId   String
+  admin     User     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([adminId])
 }
 
 model TicketMessage {

@@ -5,7 +5,7 @@ import {db} from '@/lib/db';
 import {decrypt} from '@/services/orders/order.service';
 
 const statusLabel:Record<string,string>={WAITING_PAYMENT:'Aguardando pagamento',PAID:'Pagamento aprovado',PROCESSING:'Processando entrega',DELIVERED:'Entregue',FAILED:'Falhou',CANCELLED:'Cancelado',REFUNDED:'Reembolsado',PENDING:'Pendente'};
-function accessContent(value:string){try{const parsed=JSON.parse(value) as Record<string,unknown>;return Object.entries(parsed).map(([key,item])=><div className="row" style={{justifyContent:'space-between'}} key={key}><span>{key}</span><strong>{String(item)}</strong></div>);}catch{return <p>{value}</p>;}}
+function accessContent(value:string){try{const parsed=JSON.parse(value) as Record<string,unknown>;const hidden=new Set(['valor','cost','custo','reserved_by','billing']);return Object.entries(parsed).filter(([key])=>!hidden.has(key.toLowerCase())).map(([key,item])=><div className="row" style={{justifyContent:'space-between'}} key={key}><span>{key}</span><strong>{typeof item==='object'&&item!==null?JSON.stringify(item):String(item)}</strong></div>);}catch{return <p>{value}</p>;}}
 
 export default async function OrderDetail({params}:{params:Promise<{id:string}>}){
   const user=await requireUser();const {id}=await params;

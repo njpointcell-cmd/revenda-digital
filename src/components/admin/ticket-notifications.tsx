@@ -10,11 +10,23 @@ export function TicketNotifications(){
   const lastSeen=useRef(new Date().toISOString());
   const audio=useRef<AudioContext|null>(null);
 
-  function enable(){
+  async function enable(){
     setEnabled(true);
     if('Notification' in window){
-      setPermission(Notification.permission);
-      if(Notification.permission==='default')Notification.requestPermission().then(setPermission);
+      let nextPermission=Notification.permission;
+      if(nextPermission==='default')nextPermission=await Notification.requestPermission();
+      setPermission(nextPermission);
+      if(nextPermission==='granted'){
+        try{
+          const config=await fetch('/api/admin/push-subscription',{cache:'no-store'});
+          if(config.ok){
+            const {publicKey}=await config.json() as {publicKey:string};
+            const registration=await navigator.serviceWorker.register('/sw.js');
+            const subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:toUint8Array(publicKey)});
+            await fetch('/api/admin/push-subscription',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(subscription.toJSON())});
+          }
+        }catch(error){console.error('Não foi possível ativar notificações push.',error);}
+      }
     }
     audio.current??=new AudioContext();
     void audio.current.resume();
@@ -36,4 +48,10 @@ export function TicketNotifications(){
     return()=>window.clearInterval(timer);
   },[enabled,permission]);
   return <div className="notice row" style={{justifyContent:'space-between',marginBottom:24}}><span>{newTickets>0?<><strong>{newTickets} novo(s) chamado(s).</strong> <Link className="text-link" href="/admin/tickets" onClick={()=>setNewTickets(0)}>Ver tickets</Link></>:'Receba um aviso quando um cliente abrir um chamado.'}</span><button className="text-link" onClick={enable}>{enabled?'Alertas ativados':'Ativar alertas (toque para liberar som)'}</button></div>;
+}
+
+function toUint8Array(value:string){
+  const padding='='.repeat((4-value.length%4)%4);
+  const base64=(value+padding).replace(/-/g,'+').replace(/_/g,'/');
+  return Uint8Array.from(atob(base64),character=>character.charCodeAt(0));
 }

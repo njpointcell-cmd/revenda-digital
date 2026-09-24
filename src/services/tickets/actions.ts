@@ -7,6 +7,7 @@ import {actionError} from '@/lib/action-error';
 import type {ActionState} from '@/lib/action-state';
 import {messageSchema,ticketSchema} from '@/validations/tickets';
 import {uploadImage} from '@/lib/cloudinary';
+import {notifyAdminsCustomerReply,notifyAdminsNewTicket} from '@/services/notifications/admin-push';
 
 async function attachmentData(form:FormData, folder:string){
   const file=form.get('attachment');
@@ -22,6 +23,7 @@ export async function createTicket(_:ActionState,form:FormData):Promise<ActionSt
     if(data.orderId){const order=await db.order.findFirst({where:{id:data.orderId,userId:user.id},select:{id:true}});if(!order)throw new Error('Pedido inválido para este chamado.');}
     const attachment=await attachmentData(form,'revenda-digital/tickets');
     const ticket=await db.ticket.create({data:{userId:user.id,orderId:data.orderId||null,subject:data.subject,category:data.category,status:'OPEN',messages:{create:{authorId:user.id,body:data.body,attachments:attachment?{create:attachment}:undefined}}}});
+    await notifyAdminsNewTicket({id:ticket.id,subject:ticket.subject,userName:user.name});
     revalidatePath('/minha-conta/suporte');redirect(`/minha-conta/suporte/${ticket.id}`);
   }catch(error){return actionError(error);}
 }
@@ -32,6 +34,7 @@ export async function replyTicket(_:ActionState,form:FormData):Promise<ActionSta
     const ticket=await db.ticket.findFirst({where:{id:ticketId,userId:user.id}});if(!ticket)throw new Error('Chamado não encontrado.');
     const attachment=await attachmentData(form,'revenda-digital/tickets');
     await db.$transaction([db.ticketMessage.create({data:{ticketId,authorId:user.id,body:data.body,attachments:attachment?{create:attachment}:undefined}}),db.ticket.update({where:{id:ticketId},data:{status:'WAITING_SUPPORT'}})]);
+    await notifyAdminsCustomerReply({id:ticket.id,subject:ticket.subject,userName:user.name});
     revalidatePath(`/minha-conta/suporte/${ticketId}`);return {success:'Resposta enviada.'};
   }catch(error){return actionError(error);}
 }
