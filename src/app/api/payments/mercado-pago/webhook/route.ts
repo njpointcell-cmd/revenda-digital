@@ -15,7 +15,7 @@ export async function POST(request:NextRequest){
       if(payment.status==='approved')await creditTopUp(payment.external_reference.slice('wallet-topup:'.length),String(payment.id));
       return NextResponse.json({received:true});
     }
-    const status=payment.status==='approved'?'PAID':payment.status==='rejected'?'FAILED':payment.status==='cancelled'?'CANCELLED':'PENDING';
+    const status=payment.status==='approved'?'PAID':payment.status==='rejected'?'FAILED':(payment.status==='cancelled'||payment.status==='expired')?'CANCELLED':'PENDING';
     await db.$transaction(async tx=>{
       const order=await tx.order.findUnique({where:{id:payment.external_reference}});
       if(!order)return;

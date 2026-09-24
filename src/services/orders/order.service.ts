@@ -3,6 +3,7 @@ import {randomUUID} from 'node:crypto';
 import {db} from '@/lib/db';
 import {cartSchema} from '@/validations/cart';
 import {configuredSupplierService} from '@/services/suppliers/supplier.service';
+import {createPixPayment} from '@/services/payments/mercado-pago';
 import {createCipheriv,createDecipheriv,createHash,randomBytes} from 'node:crypto';
 
 function encrypt(value:string){const key=createHash('sha256').update(process.env.SESSION_SECRET??'').digest();const iv=randomBytes(12);const cipher=createCipheriv('aes-256-gcm',key,iv);const content=Buffer.concat([cipher.update(value,'utf8'),cipher.final()]);return `${iv.toString('base64url')}.${cipher.getAuthTag().toString('base64url')}.${content.toString('base64url')}`;}
@@ -32,14 +33,18 @@ export async function createOrder(userId:string,email:string,input:unknown){
     if(products.length!==items.length)throw new Error('Um produto não está mais disponível.');
     const lines=items.map(item=>{const product=products.find(value=>value.id===item.productId)!;if(item.quantity>product.availableStock)throw new Error(`Estoque insuficiente para ${product.name}.`);return {item,product};});
     const subtotal=lines.reduce((sum,line)=>sum+Number(line.product.price)*line.item.quantity,0).toFixed(2);
-    const wallet=await tx.wallet.upsert({where:{userId},create:{userId,balance:0},update:{}});
-    const debited=await tx.wallet.updateMany({where:{id:wallet.id,balance:{gte:subtotal}},data:{balance:{decrement:subtotal}}});
-    if(debited.count!==1)throw new Error('Saldo insuficiente. Adicione crédito à sua carteira para concluir o pedido.');
-    const created=await tx.order.create({data:{userId,idempotencyKey:randomUUID(),subtotal,total:subtotal,status:'PAID',items:{create:lines.map(line=>({productId:line.product.id,productName:line.product.name,unitPrice:line.product.price,unitCost:line.product.cost,quantity:line.item.quantity,deliveryType:line.product.deliveryType}))},history:{create:{status:'PAID',reason:'Pedido pago com saldo da carteira.'}}},include:{items:true}});
-    await tx.payment.create({data:{orderId:created.id,provider:'wallet',idempotencyKey:`payment-${created.id}`,amount:subtotal,status:'PAID',confirmedAt:new Date()}});
-    await tx.walletTransaction.create({data:{walletId:wallet.id,type:'ORDER_PAYMENT',amount:-Number(subtotal),idempotencyKey:`order-${created.id}`,orderId:created.id}});
+    const created=await tx.order.create({data:{userId,idempotencyKey:randomUUID(),subtotal,total:subtotal,status:'WAITING_PAYMENT',items:{create:lines.map(line=>({productId:line.product.id,productName:line.product.name,unitPrice:line.product.price,unitCost:line.product.cost,quantity:line.item.quantity,deliveryType:line.product.deliveryType}))},history:{create:{status:'WAITING_PAYMENT',reason:'Pedido criado; aguardando pagamento via PIX.'}}},include:{items:true}});
+    await tx.payment.create({data:{orderId:created.id,provider:'mercadopago',idempotencyKey:`payment-${created.id}`,amount:subtotal,status:'PENDING'}});
     return created;
   });
-  await fulfillPaidOrder(order.id);
-  return {orderId:order.id,number:order.number};
+  const expiresAt=new Date(Date.now()+30*60*1000);
+  try{
+    const payment=await createPixPayment({orderId:order.id,amount:Number(order.total),email,description:`Pedido #${order.number}`,expiresAt});
+    await db.payment.updateMany({where:{orderId:order.id},data:{externalId:String(payment.id)}});
+    const transactionData=payment.point_of_interaction?.transaction_data;
+    return {orderId:order.id,number:order.number,paymentId:String(payment.id),qrCodeBase64:transactionData?.qr_code_base64??'',qrCode:transactionData?.qr_code??'',ticketUrl:transactionData?.ticket_url??'',expiresAt:payment.date_of_expiration??expiresAt.toISOString()};
+  }catch(error){
+    await db.order.update({where:{id:order.id},data:{status:'FAILED',history:{create:{status:'FAILED',reason:'Não foi possível gerar o pagamento PIX.'}}}});
+    throw error;
+  }
 }
