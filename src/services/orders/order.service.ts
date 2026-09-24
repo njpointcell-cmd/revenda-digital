@@ -35,15 +35,25 @@ export async function fulfillPaidOrder(orderId:string){
 
 export async function createOrder(userId:string,email:string,input:unknown){
   const items=cartSchema.parse(input);if(!items.length)throw new Error('Carrinho vazio.');
+  let walletPaid=false;
   const order=await db.$transaction(async tx=>{
     const products=await tx.product.findMany({where:{id:{in:items.map(item=>item.productId)},status:'ACTIVE'}});
     if(products.length!==items.length)throw new Error('Um produto não está mais disponível.');
     const lines=items.map(item=>{const product=products.find(value=>value.id===item.productId)!;if(item.quantity>product.availableStock)throw new Error(`Estoque insuficiente para ${product.name}.`);return {item,product};});
     const subtotal=lines.reduce((sum,line)=>sum+Number(line.product.price)*line.item.quantity,0).toFixed(2);
-    const created=await tx.order.create({data:{userId,idempotencyKey:randomUUID(),subtotal,total:subtotal,status:'WAITING_PAYMENT',items:{create:lines.map(line=>({productId:line.product.id,productName:line.product.name,unitPrice:line.product.price,unitCost:line.product.cost,quantity:line.item.quantity,deliveryType:line.product.deliveryType}))},history:{create:{status:'WAITING_PAYMENT',reason:'Pedido criado; aguardando pagamento via PIX.'}}},include:{items:true}});
-    await tx.payment.create({data:{orderId:created.id,provider:'mercadopago',idempotencyKey:`payment-${created.id}`,amount:subtotal,status:'PENDING'}});
+    const wallet=await tx.wallet.findUnique({where:{userId},select:{id:true,balance:true}});
+    if(wallet){
+      const debit=await tx.wallet.updateMany({where:{id:wallet.id,balance:{gte:subtotal}},data:{balance:{decrement:subtotal}}});
+      walletPaid=debit.count===1;
+    }
+    const created=await tx.order.create({data:{userId,idempotencyKey:randomUUID(),subtotal,total:subtotal,status:walletPaid?'PAID':'WAITING_PAYMENT',items:{create:lines.map(line=>({productId:line.product.id,productName:line.product.name,unitPrice:line.product.price,unitCost:line.product.cost,quantity:line.item.quantity,deliveryType:line.product.deliveryType}))},history:{create:{status:walletPaid?'PAID':'WAITING_PAYMENT',reason:walletPaid?'Pedido pago com saldo de crédito.':'Pedido criado; aguardando pagamento via PIX.'}}},include:{items:true}});
+    if(walletPaid&&wallet){
+      await tx.walletTransaction.create({data:{walletId:wallet.id,type:'ORDER_PAYMENT',amount:Number(subtotal),orderId:created.id,idempotencyKey:`order-wallet-${created.id}`}});
+      await tx.payment.create({data:{orderId:created.id,provider:'wallet',idempotencyKey:`payment-${created.id}`,amount:subtotal,status:'PAID',confirmedAt:new Date()}});
+    }else await tx.payment.create({data:{orderId:created.id,provider:'mercadopago',idempotencyKey:`payment-${created.id}`,amount:subtotal,status:'PENDING'}});
     return created;
   });
+  if(walletPaid){await fulfillPaidOrder(order.id);return {orderId:order.id,number:order.number,walletPaid:true};}
   const expiresAt=new Date(Date.now()+30*60*1000);
   try{
     const payment=await createPixPayment({orderId:order.id,amount:Number(order.total),email,description:`Pedido #${order.number}`,expiresAt});

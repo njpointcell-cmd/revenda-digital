@@ -30,3 +30,8 @@ export async function creditTopUp(topUpId:string,paymentId:string){
 export async function getWallet(userId:string){
   return db.wallet.findUnique({where:{userId},select:{balance:true},});
 }
+
+export async function getWalletBalance(userId:string){
+  const wallet=await getWallet(userId);
+  return Number(wallet?.balance??0);
+}
