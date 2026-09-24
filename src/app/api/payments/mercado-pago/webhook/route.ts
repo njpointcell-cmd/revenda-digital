@@ -2,6 +2,7 @@ import {NextRequest,NextResponse} from 'next/server';
 import {db} from '@/lib/db';
 import {getPayment} from '@/services/payments/mercado-pago';
 import {fulfillPaidOrder} from '@/services/orders/order.service';
+import {creditTopUp} from '@/services/wallet/wallet.service';
 
 export async function POST(request:NextRequest){
   try{
@@ -10,6 +11,10 @@ export async function POST(request:NextRequest){
     if(body.type!=='payment'||!paymentId)return NextResponse.json({received:true});
     const payment=await getPayment(paymentId);
     if(!payment.external_reference)return NextResponse.json({received:true});
+    if(payment.external_reference.startsWith('wallet-topup:')){
+      if(payment.status==='approved')await creditTopUp(payment.external_reference.slice('wallet-topup:'.length),String(payment.id));
+      return NextResponse.json({received:true});
+    }
     const status=payment.status==='approved'?'PAID':payment.status==='rejected'?'FAILED':payment.status==='cancelled'?'CANCELLED':'PENDING';
     await db.$transaction(async tx=>{
       const order=await tx.order.findUnique({where:{id:payment.external_reference}});
